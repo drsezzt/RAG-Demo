@@ -1,0 +1,70 @@
+version: "3.9"
+
+networks:
+  rag_net:
+
+services:
+  llm:
+    build:
+      context: .
+      dockerfile: llm_service/Dockerfile
+    container_name: llm
+    expose:
+      - "8001"
+    networks:
+      - rag_net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+
+  rag:
+    build:
+      context: .
+      dockerfile: rag_app/Dockerfile
+    container_name: rag
+    ports:
+      - "8000:8000"
+    networks:
+      - rag_net
+    environment:
+      - LLM_API_URL=http://llm:8001
+    depends_on:
+      - llm
+
+  ui_rag:
+    build:
+      context: .
+      dockerfile: ui/Dockerfile
+    container_name: ui_rag
+    command: >
+      streamlit run ui/rag_gui.py
+      --server.address=0.0.0.0
+      --server.port=8501
+    ports:
+      - "8501:8501"
+    networks:
+      - rag_net
+    environment:
+      - RAG_API_URL=http://rag:8000
+    depends_on:
+      - rag
+
+  ui_vdb:
+    build:
+      context: .
+      dockerfile: ui/Dockerfile
+    container_name: ui_vdb
+    command: >
+      streamlit run ui/vdb_gui.py
+      --server.address=0.0.0.0
+      --server.port=8502
+    ports:
+      - "8502:8502"
+    networks:
+      - rag_net
+    environment:
+      - RAG_API_URL=http://rag:8000
+    depends_on:
+      - rag
