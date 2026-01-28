@@ -6,12 +6,10 @@ import chatglm_cpp
 
 logger = logging.getLogger("LLM")
 
-MODEL_PATH = "./llm_service/models/chatglm3-q5_1.bin"
-
 class ChatGLM:
-    def __init__(self):
+    def __init__(self, path):
         try:
-            self.pipeline = chatglm_cpp.Pipeline(MODEL_PATH)
+            self.pipeline = chatglm_cpp.Pipeline(path)
             logger.info("ChatGLM3-6B model loaded successfully.")
         except Exception as e:
             raise e
