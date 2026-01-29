@@ -13,5 +13,5 @@ def init_component_logger(name):
         handler.setFormatter(formatter)
 
         logger.addHandler(handler)
-        logger.setLevel(logging.INFO)
+        logger.setLevel(logging.DEBUG)
     return logger

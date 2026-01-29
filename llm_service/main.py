@@ -1,40 +1,58 @@
-from llm_service.engine import ChatGLM
-from libs.protocols.llm_contract import GenerateResponse, GenerateRequest
-from libs.utils.logger import init_component_logger
+"""
+LLM service interface for RAG generation.
+"""
+
+import uuid
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-import json
-import os
+
+from llm_service.engine import ChatGLM
+from llm_service.config_manager import load_model_configs
+from libs.utils.logger import init_component_logger
+from libs.protocols.llm_contract import GenerateResponse, GenerateRequest
 
 logger = init_component_logger("LLM")
-logger.info("RAG 推理服务启动...")
 
-MODELS_CONFIG_PATH = "./llm_service/models_path.json"
+REQUEST_ID_HEADER = "X-Request-ID"      # 请求ID
+USER_ID_HEADER = "X-User-ID"            # 用户ID
 
-def get_models_path():
-    if not os.path.exists(MODELS_CONFIG_PATH):
-        logger.error("模型配置文件不存在，请检查路径是否正确")
-        raise Exception("模型文件不存在，请检查模型文件路径是否正确")
+async def request_id_middleware(request: Request, call_next):
+    req_id = request.headers.get(REQUEST_ID_HEADER)
+    if not req_id:
+        req_id = uuid.uuid4().hex
 
-    with open(MODELS_CONFIG_PATH, "r") as f:
-        models_config = json.load(f)
+    request.state.request_id = req_id
 
-    for model in models_config:
-        logger.info(f"Find model: {model['name']}")
-
-    return models_config[0]["path"]
+    response = await call_next(request)
+    response.headers[REQUEST_ID_HEADER] = req_id
+    return response
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Initializing model...")
+    logger.info("op=llm_service_begin")
+
+    models = load_model_configs()
+    if not models:
+        raise Exception("no models found")
+
+    model = models[0]
+    logger.info(
+        "op=model_set_app_start "
+        f"usable_models={len(models)} "
+        f"use_model={model.get('name')}"
+    )
     try:
-        app.state.model = ChatGLM(get_models_path())
-        logger.info("Model loaded into app state.")
+        app.state.model = ChatGLM(models[0]["path"])
+        logger.info("op=model_set_app_done")
     except Exception as e:
-        logger.error(f"Failed to load model: {e}")
-        raise e
+        logger.info("op=model_set_app_error")
+        raise Exception("no models found")
+
     yield
+
+    logger.info("op=llm_service_finish")
 
 app = FastAPI(
     title="ChatGLM3-6B API",
@@ -42,22 +60,85 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+app.middleware("http")(request_id_middleware)
 
+# 测试
 @app.get("/")
 def read_root():
     return {"msg": "ChatGLM3-6B API Service"}
+
+# 测试
 @app.get("/health")
-def check_health():
+def check_health(request: Request):
+    logger.debug("op=health_check model_loaded=true")
     return {"status": "healthy", "model_loaded": True}
 
+# 生成
 @app.post("/generate", response_model=GenerateResponse)
-def generate(request: GenerateRequest):
-        model = app.state.model
-        result, history = model.chat(**request.model_dump())
-        return GenerateResponse(response=result, history=history)
+def generate(
+    request: Request,
+    body: GenerateRequest
+) -> GenerateResponse:
+    req_id = request.state.request_id
+    path = request.url.path
+    user_id = (
+        request.headers.get(USER_ID_HEADER)
+        or body.user_id
+        or "anonymous"
+    )
+
+    logger.info(
+        "op=request_start "
+        f"req={req_id} "
+        f"user={user_id} "
+        f"path={path}"
+    )
+
+    model = request.app.state.model
+
+    try:
+        result, history = model.chat(
+            text=body.text,
+            history=body.history,
+            do_sample=body.do_sample,
+            temperature=body.temperature,
+            top_p=body.top_p,
+            max_tokens=body.max_tokens,
+            req_id=req_id,
+            user_id=user_id,
+        )
+
+        response = GenerateResponse(
+            response=result,
+            history=history,
+            status="ok"
+        )
+
+        logger.info(
+            "op=request_end "
+            f"req={req_id} "
+            f"user={user_id} "
+            f"path={path} "
+            f"status=ok"
+        )
+        return response
+    except Exception as e:
+        logger.exception(
+            "op=request_error "
+            f"req={req_id} "
+            f"user={user_id} "
+            f"path={path} "
+            f"error={type(e).__name__}"
+        )
+        raise
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Global Error: {exc}", exc_info=True)
+    logger.error(
+        "op=global_exception "
+        f"error={type(exc).__name__}",
+        exc_info=True
+    )
     return JSONResponse(
         status_code=500,
         content=GenerateResponse(
@@ -68,7 +149,6 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 if __name__ == "__main__":
-    logger.info("Starting ChatGLM3-6B API server...")
     # 启动一个ASGI服务器
     import uvicorn
     uvicorn.run(
