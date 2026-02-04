@@ -7,21 +7,6 @@ import logging
 
 logger = logging.getLogger("RAG_APP")
 
-def fix_json_brackets(raw_str):
-    if not raw_str:
-        return "{}"
-
-    # 1. 清理两侧空白字符（换行、空格、制表符）
-    s = raw_str.strip()
-
-    # 2. 补全逻辑
-    if not s.startswith('{'):
-        s = '\'{' + s
-    if not s.endswith('}'):
-        s = s + '}'
-
-    return s
-
 def robust_json_parser(raw_text: str):
     """
     通用 LLM JSON 提取器：

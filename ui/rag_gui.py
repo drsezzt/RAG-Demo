@@ -1,23 +1,25 @@
-from libs.utils.logger import init_component_logger
-import streamlit as st
 import requests
-import os
 
-RAG_API_URL = os.getenv("RAG_API_URL", "http://localhost:8000")
+import streamlit as st
+
+from libs.settings import AppConfig
+from libs.utils.logger import init_component_logger
+
+@st.cache_resource
+def get_app_config():
+    return AppConfig.load("config/config.yaml")
 
 @st.cache_resource
 def get_logger():
-    _logger = init_component_logger("RAG_GUI")
-    _logger.info("VDB 管理UI启动")
-    _logger.info(f"Using RAG_API_URL={RAG_API_URL}")
-    return _logger
+    return init_component_logger("RAG_GUI")
 
+config = get_app_config()
 logger = get_logger()
 
 def render_admin():
-    st.set_page_config(page_title="AI 法律助手", page_icon="⚖️")
+    st.set_page_config(page_title="AI 知识助手", page_icon="⚖️")
 
-    st.title("⚖️AI 法律智能咨询系统")
+    st.title("⚖️AI 智能知识问答系统")
     st.markdown("---")
 
     if "messages" not in st.session_state:
@@ -34,18 +36,19 @@ def render_admin():
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    if user_input := st.chat_input("请描述您的法律问题..."):
+    if user_input := st.chat_input("请描述您的问题..."):
         st.session_state.messages.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
             st.markdown(user_input)
 
+        url = "http://" + config.rag.host + ":" + str(config.rag.port)
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
-            message_placeholder.markdown("🔍 正在检索法条并生成回复...")
+            message_placeholder.markdown("🔍 正在检索知识库并生成回复...")
 
             try:
                 response = requests.post(
-                    RAG_API_URL + "/chat",
+                    url + "/chat",
                     json={"text": user_input},
                     timeout=60
                 )

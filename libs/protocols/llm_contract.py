@@ -10,7 +10,7 @@ class GenerateRequest(BaseModel):
     do_sample: bool = False                             # 是否开启采样
     temperature: float = Field(0.8, ge=0.0, le=2.0)     # 采样温度
     top_p: float = Field(0.9, ge=0.0, le=1.0)           # 采样阈值
-    max_tokens: int = Field(512, ge=1, le=4096)         # 最大生成长度
+    max_tokens: int = Field(512, ge=1, le=8192)         # 最大生成长度
     user_id: Optional[str] = None                       # 用户ID
 
     model_config = {

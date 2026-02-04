@@ -33,7 +33,7 @@ class LLMClient:
 
             res_json = response.json()
             chat_res = GenerateResponse.model_validate(res_json)
-            if chat_res.status == "success":
+            if chat_res.status == "ok":
                 return chat_res.response
             else:
                 raise Exception(f"LLM Service Error: {chat_res.response}")

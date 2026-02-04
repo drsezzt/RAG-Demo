@@ -1,48 +1,64 @@
-# FastAPI接入层
-# 职责：API的端点定义、中间件配置和全局异常处理，不关心如何检索
-#      和如何解析JSON，只负责HTTP->Python对象的协议转换
+"""
+RAG service interface for vector database management, document retrieval, and answer generation.
+"""
+import json
 
-from libs.protocols.rag_contract import ChatRequest, ChatResponse
-from libs.protocols.vdb_contract import GetLawListResponse, AddLawRequest, CommonResponse
-from libs.utils.logger import init_component_logger
-from rag_app.core.manager import VectorManager
-from rag_app.core.llm_client import LLMClient
 from fastapi import FastAPI, Request
+
+from libs.utils.logger import init_component_logger
+from libs.settings import AppConfig
+from libs.protocols.rag_contract import ChatRequest, ChatResponse
+from libs.protocols.vdb_contract import GetDocListResponse, AddDocRequest, CommonResponse
 from rag_app.libs.utils import get_embeddings
+from rag_app.core.llm_client import LLMClient
 from rag_app.services.rag_service import RAGService
-import os
+from rag_app.vector_store.service import VectorStoreService
+from rag_app.vector_store.raw_faiss.store import FaissVectorStore
+from rag_app.vector_store.metadata import MetadataRepository
 
 logger = init_component_logger("RAG_APP")
-logger.info("RAG 主服务启动...")
-
-LLM_API_URL = os.getenv("LLM_API_URL", "http://localhost:8001")
-VDB_PATH = "rag_app/vector_db/faiss_index"          # 向量数据库路径
-
-# 向量库检查
-def check_vdb(vdb):
-    # 1. 查看库中有多少个向量
-    vector_count = vdb.index.ntotal
-    print(f"向量总数: {vector_count}")
-
-    # 2. 查看向量的维度 (例如 768 或 1024)
-    dimension = vdb.index.d
-    print(f"向量维度: {dimension}")
-
-    # 3. 查看 docstore 里的第一个文档（抽样检查）
-    # 注意：vdb.docstore._dict 是存储数据的私有字典
-    for sample_id in list(vdb.index_to_docstore_id.values()):
-        sample_doc = vdb.docstore.search(sample_id)
-        print(f"样本文档内容: {sample_doc.page_content[:50]}...")
-        print(f"样本文档元数据: {sample_doc.metadata}")
+config = AppConfig.load("config/config.yaml")
 
 async def lifespan(app: FastAPI):
-    # 启动时加载
-    app.state.llm = LLMClient(LLM_API_URL)
-    app.state.manager = VectorManager(VDB_PATH, get_embeddings())
-    if app.state.manager.vdb is not None:
-        check_vdb(app.state.manager.vdb)
+    logger.info("op=rag_app_begin")
+
+    # 初始化LLM客户端
+    url = "http://" + config.llm.host + ":" + str(config.llm.port)
+    logger.info(f"op=app_set_llm_start url={url}")
+    app.state.llm = LLMClient(url)
+    logger.info("op=app_set_llm_done")
+
+    # 初始化向量库
+    index_path = config.vector_store.index_path
+    logger.info(f"op=vdb_store_init_start path={index_path}")
+    vdb_store = FaissVectorStore(
+        dim=512,
+        store_dir=index_path,
+    )
+    logger.info("op=vdb_store_init_done")
+
+    # 初始化元数据管理
+    meta_path = config.vector_store.meta_path
+    logger.info(f"op=vdb_meta_init_start path={meta_path}")
+    metadata = MetadataRepository(
+        path=meta_path,
+    )
+    logger.info("op=vdb_meta_init_done")
+
+    # 初始化向量库服务
+    embed_path=config.vector_store.embed_path
+    logger.info("op=vdb_service_init_start")
+    app.state.vdb_service = VectorStoreService(
+        store=vdb_store,
+        metadata=metadata,
+        embedder=get_embeddings(),
+        embed_path=embed_path,
+    )
+    logger.info("op=vdb_service_init_done")
 
     yield
+
+    logger.info("op=rag_app_finish")
 
 app = FastAPI(
     title="RAGSystem API",
@@ -51,56 +67,106 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# 问答接口
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: Request, chat_in: ChatRequest):
-    service = RAGService(request.app.state.llm, request.app.state.manager.vdb)
+    logger.info(
+        "op=chat_start "
+        f"text={chat_in.text}"
+    )
+    service = RAGService(request.app.state.llm, request.app.state.vdb_service)
     try:
         answer = service.call_rag_flow(chat_in.text)
+        logger.info(
+            "op=chat_end "
+            f"answer={answer}"
+        )
         return ChatResponse(response=answer)
     except Exception as e:
-        logger.error(f"RAG Flow Failed: {e}")
+        logger.exception(
+            "op=chat_error "
+            f"answer={answer} "
+            f"error={type(e).__name__}"
+        )
         return ChatResponse(response="系统繁忙，请稍后再试。", status="error")
 
-@app.get("/law", response_model=GetLawListResponse)
-async def get_law_list(request: Request):
-    manager = request.app.state.manager
+# 获取所有文档
+@app.get("/doc", response_model=GetDocListResponse)
+async def get_doc_list(request: Request):
+    logger.info("op=get_doc_list_start")
+    service = request.app.state.vdb_service
     try:
-        laws = manager.get_supported_laws()
-        return GetLawListResponse(laws=laws)
+        metas = service.list_files()
+        docs = [meta.model_dump() for meta in metas]
+        logger.info(
+            "op=get_doc_list_end "
+            f"doc_count={len(docs)}"
+        )
+        return GetDocListResponse(docs=docs)
     except Exception as e:
-        logger.error(f"VDB Get Laws Failed: {e}")
-        return GetLawListResponse()
+        logger.exception(
+            "op=get_doc_list_exception "
+            f"docs={docs} "
+            f"exception={type(e).__name__}"
+        )
+        return GetDocListResponse()
 
-@app.delete("/law/{law_name}", response_model=CommonResponse)
-async def delete_law(request: Request, law_name: str):
-    manager = request.app.state.manager
+# 删除文档
+@app.delete("/doc/{doc_id}", response_model=CommonResponse)
+async def delete_doc(request: Request, doc_id: str):
+    logger.info("op=delete_doc_start")
+    service = request.app.state.vdb_service
     try:
-        if manager.delete_law(law_name):
-            return CommonResponse(status="success")
+        if service.delete_file(doc_id):
+            logger.info("op=delete_doc_end")
+            return CommonResponse(status="ok")
+        logger.error("op=delete_doc_error")
         return CommonResponse(status="error")
     except Exception as e:
-        logger.error(f"VDB Delete Law Failed: {e}")
+        logger.exception(
+            "op=delete_doc_exception "
+            f"exception={type(e).__name__}"
+        )
         return CommonResponse(status="error")
 
-@app.post("/law", response_model=CommonResponse)
-async def add_law(request: Request, param_in: AddLawRequest):
-    manager = request.app.state.manager
+# 添加文档
+@app.post("/doc", response_model=CommonResponse)
+async def add_doc(request: Request, param_in: AddDocRequest):
+    logger.info(
+        "op=add_doc_start "
+        f"doc_name={param_in.name}"
+    )
+    service = request.app.state.vdb_service
     try:
-        if manager.add_new_law(param_in.name, param_in.content):
-            return CommonResponse(status="success")
+        tmp_path = "/tmp/" + param_in.name
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            f.write(param_in.content)
+        if service.add_file(tmp_path):
+            logger.info("op=add_doc_end")
+            return CommonResponse(status="ok")
+        logger.error("op=add_doc_error")
         return CommonResponse(status="error")
     except Exception as e:
-        logger.error(f"VDB Add Law Failed: {e}")
+        logger.exception(
+            "op=add_doc_exception "
+            f"exception={type(e).__name__}"
+        )
         return CommonResponse(status="error")
 
 if __name__ == "__main__":
-    logger.info("--- RAG_APP 正在启动 ---")
     import uvicorn
+
+    host = config.rag.host
+    port = config.rag.port
+    logger.info(
+        "op=uvicorn_start "
+        f"host={host} "
+        f"port={port}"
+    )
     uvicorn.run(
         app,
-        host="0.0.0.0",
-        port=8000,
+        host=host,
+        port=port,
         log_level="info"
     )
-    logger.info("--- RAG_APP 启动完成 ---")
-    logger.info(f"Using LLM_API_URL={LLM_API_URL}")
+    logger.info("op=uvicorn_running")

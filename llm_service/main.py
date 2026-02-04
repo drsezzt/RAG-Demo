@@ -8,12 +8,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from llm_service.engine import ChatGLM
-from llm_service.config_manager import load_model_configs
+from libs.settings import AppConfig
 from libs.utils.logger import init_component_logger
 from libs.protocols.llm_contract import GenerateResponse, GenerateRequest
+from llm_service.engine import ChatGLM
 
 logger = init_component_logger("LLM")
+config = AppConfig.load("config/config.yaml")
 
 REQUEST_ID_HEADER = "X-Request-ID"      # 请求ID
 USER_ID_HEADER = "X-User-ID"            # 用户ID
@@ -33,21 +34,20 @@ async def request_id_middleware(request: Request, call_next):
 async def lifespan(app: FastAPI):
     logger.info("op=llm_service_begin")
 
-    models = load_model_configs()
+    models = config.llm.models
     if not models:
-        raise Exception("no models found")
+        raise Exception("No LLM models configured")
 
-    model = models[0]
     logger.info(
-        "op=model_set_app_start "
+        "op=app_set_model_start "
         f"usable_models={len(models)} "
-        f"use_model={model.get('name')}"
+        f"use_model={models[0].name}"
     )
     try:
-        app.state.model = ChatGLM(models[0]["path"])
-        logger.info("op=model_set_app_done")
+        app.state.model = ChatGLM(models[0].path)
+        logger.info("op=app_set_model_done")
     except Exception as e:
-        logger.info("op=model_set_app_error")
+        logger.info("op=app_set_model_error")
         raise Exception("no models found")
 
     yield
