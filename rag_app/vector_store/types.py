@@ -17,6 +17,8 @@ class ChunkMeta(BaseModel):
     offset: int = Field(ge=0)
     length: int = Field(gt=0)
 
+    created_at: Optional[datetime] = None
+
     text: str
 
 

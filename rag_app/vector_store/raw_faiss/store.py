@@ -4,6 +4,7 @@ import faiss
 import logging
 import numpy as np
 from datetime import datetime
+import time as _time
 
 from rag_app.vector_store.types import ChunkMeta, DocMap
 
@@ -40,10 +41,30 @@ class FaissVectorStore:
         self.index = self._load_or_create_index()
         self.doc_map = self._load_or_create_map()
 
+        # 如果 index / map 任一损坏或不一致，重置以保证可用性
+        # （最小一致性：不因单文件损坏导致服务起不来）
+        if getattr(self.index, "ntotal", None) is not None and self.index.ntotal != self.doc_map.next_id:
+            logger.warning(
+                "op=vdb_store_inconsistent_reset "
+                f"index_ntotal={self.index.ntotal} "
+                f"map_next_id={self.doc_map.next_id}"
+            )
+            self._reset()
+
     # ============ 加载向量库 ============
     def _load_or_create_index(self):
         if os.path.exists(self.index_path):
-            return faiss.read_index(self.index_path)
+            try:
+                return faiss.read_index(self.index_path)
+            except Exception:
+                # index 文件损坏：备份并重建
+                try:
+                    bak = self.index_path + f".corrupt.{int(_time.time())}"
+                    os.replace(self.index_path, bak)
+                    logger.exception(f"op=faiss_index_corrupt_backup path={bak}")
+                except Exception:
+                    logger.exception("op=faiss_index_corrupt_backup_failed")
+                return faiss.IndexFlatIP(self.dim)
 
         print("🆕 Create new FAISS index")
 
@@ -56,8 +77,18 @@ class FaissVectorStore:
     # ============ 加载映射文件 ============
     def _load_or_create_map(self):
         if os.path.exists(self.map_path):
-            with open(self.map_path, "r", encoding="utf-8") as f:
-                return DocMap.model_validate_json(f.read())
+            try:
+                with open(self.map_path, "r", encoding="utf-8") as f:
+                    return DocMap.model_validate_json(f.read())
+            except Exception:
+                # JSON 截断/损坏：备份并重建（否则应用启动直接失败）
+                try:
+                    bak = self.map_path + f".corrupt.{int(_time.time())}"
+                    os.replace(self.map_path, bak)
+                    logger.exception(f"op=doc_map_corrupt_backup path={bak}")
+                except Exception:
+                    logger.exception("op=doc_map_corrupt_backup_failed")
+                return DocMap()
 
         # 首次创建立即写盘
         doc_map = DocMap()
@@ -68,10 +99,16 @@ class FaissVectorStore:
 
     # ============ 持久化向量库 ============
     def _save(self):
-        faiss.write_index(self.index, self.index_path)
+        # 先写临时文件再原子替换，避免崩溃导致文件截断
+        tmp_index_path = self.index_path + ".tmp"
+        faiss.write_index(self.index, tmp_index_path)
+        os.replace(tmp_index_path, self.index_path)
 
-        with open(self.map_path, "w", encoding="utf-8") as f:
-            json.dump(self.doc_map.model_dump(), f, indent=2, ensure_ascii=False)
+        tmp_map_path = self.map_path + ".tmp"
+        with open(tmp_map_path, "w", encoding="utf-8") as f:
+            # 关键：使用 pydantic 的 JSON mode，确保 datetime 被序列化为字符串
+            f.write(self.doc_map.model_dump_json(indent=2))
+        os.replace(tmp_map_path, self.map_path)
 
     # ============ 归一化处理 ============
     def _normalize(self, vectors: np.ndarray):

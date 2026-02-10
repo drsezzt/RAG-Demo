@@ -10,6 +10,7 @@ import numpy as np
 from rag_app.vector_store.raw_faiss.store import FaissVectorStore
 from rag_app.vector_store.metadata import MetadataRepository
 from rag_app.vector_store.types import FileMeta, ArticleMeta, ChunkMeta
+from rag_app.vector_store.embedding_store import ArticleEmbeddingStore
 from libs.utils.logger import init_component_logger
 
 logger = init_component_logger("VDB")
@@ -32,7 +33,7 @@ class VectorStoreService:
         self.metadata = metadata
 
         self.embedder = embedder
-        self.embed_path = embed_path
+        self.article_store = ArticleEmbeddingStore(embed_path)
 
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
@@ -43,35 +44,6 @@ class VectorStoreService:
     # ===========================
     # Public API
     # ===========================
-
-    # ============ 保存章节的embedding ============
-    def save_article_embeddings(self, article_id, vec):
-        path = self.embed_path
-        if os.path.exists(path):
-            data = dict(np.load(path, allow_pickle=True))
-        else:
-            data = {}
-
-        data[article_id] = np.asarray(vec, dtype=np.float32)
-
-        np.savez_compressed(path, **data)
-
-    def load_embeddings(self):
-        path = self.embed_path
-        if not os.path.exists(path):
-            return {}
-
-        data = np.load(path, allow_pickle=True)
-
-        return {k: data[k] for k in data.files}
-
-    def delete_embeddings(self, article_ids):
-        data = self.load_embeddings()
-
-        for aid in article_ids:
-            data.pop(aid, None)
-
-        np.savez_compressed(self.embed_path, **data)
 
     def list_files(self) -> List[FileMeta]:
         files_dict = self.metadata.list_all_files()
@@ -110,7 +82,7 @@ class VectorStoreService:
                 offset=offset,
                 length=chunk_len,
                 text=chunk,
-                created_at=datetime.now().isoformat()
+                created_at=datetime.now()
             ))
             offset += chunk_len
 
@@ -132,7 +104,7 @@ class VectorStoreService:
                 offset=offset,
                 length=article_len,
                 text=article,
-                created_at=datetime.now().isoformat()
+                created_at=datetime.now()
             ))
             offset += article_len
 
@@ -149,7 +121,7 @@ class VectorStoreService:
             chunks=len(chunks),
             size=os.path.getsize(file_path),
             article_ids=article_ids,
-            created_at=datetime.now().isoformat()
+            created_at=datetime.now()
         )
         self.metadata.add_file(filemeta)
 
@@ -157,7 +129,7 @@ class VectorStoreService:
         for articlemate in articlemetas:
             self.metadata.add_article(articlemate)
             a_vec = self.embedder.embed_query(articlemate.text)
-            self.save_article_embeddings(articlemate.article_id, a_vec)
+            self.article_store.save(articlemate.article_id, a_vec)
 
         logger.info(
             f"vdb_add_success file={filename} "
@@ -189,7 +161,7 @@ class VectorStoreService:
             self.metadata.remove_article(aid)
 
         # 4. 删除embedding
-        self.delete_embeddings(artcle_ids)
+        self.article_store.delete_batch(artcle_ids)
 
         logger.info(
             f"vdb_delete_success file={file_id} "

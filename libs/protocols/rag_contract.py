@@ -4,8 +4,8 @@ from pydantic import BaseModel
 
 # 对话请求参数
 class ChatRequest(BaseModel):
-    text: str                       # 用户问题
+    text: str                   # 用户问题
 
 # 对话响应参数
 class ChatResponse(BaseModel):
-    response: str                   # RAG回答
+    response: str               # RAG回答

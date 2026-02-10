@@ -79,8 +79,8 @@ class RAGService:
         articles = []
 
         for aid in article_ids:
-            embeds = self.vdb.load_embeddings()
-            score = cosine_sim(q_vec, embeds[aid])
+            vec = self.vdb.article_store.get(aid)
+            score = cosine_sim(q_vec, vec)
             articles.append((score, metadata.get_article(aid)))
 
         articles.sort(key=lambda x: x[0], reverse=True)
@@ -150,7 +150,6 @@ class RAGService:
         except Exception as e:
             logger.exception(
                 "op=call_rag_flow_exception "
-                f"intent={intent} "
                 f"exception={type(e).__name__}"
             )
             search_words = user_input

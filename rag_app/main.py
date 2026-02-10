@@ -85,10 +85,9 @@ async def chat(request: Request, chat_in: ChatRequest):
     except Exception as e:
         logger.exception(
             "op=chat_error "
-            f"answer={answer} "
             f"error={type(e).__name__}"
         )
-        return ChatResponse(response="系统繁忙，请稍后再试。", status="error")
+        return ChatResponse(response="系统繁忙，请稍后再试。")
 
 # 获取所有文档
 @app.get("/doc", response_model=GetDocListResponse)
@@ -106,7 +105,6 @@ async def get_doc_list(request: Request):
     except Exception as e:
         logger.exception(
             "op=get_doc_list_exception "
-            f"docs={docs} "
             f"exception={type(e).__name__}"
         )
         return GetDocListResponse()
