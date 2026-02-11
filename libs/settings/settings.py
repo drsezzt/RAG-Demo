@@ -20,6 +20,9 @@ class VectorStoreConfig(BaseModel):
     meta_path: str
     map_path: str
     embed_path: str
+    dimension: int
+    chunk_size: int
+    chunk_overlap: int
 
 class UIConfig(BaseModel):
     host: str

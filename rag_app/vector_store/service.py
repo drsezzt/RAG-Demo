@@ -11,11 +11,12 @@ from rag_app.vector_store.raw_faiss.store import FaissVectorStore
 from rag_app.vector_store.metadata import MetadataRepository
 from rag_app.vector_store.types import FileMeta, ArticleMeta, ChunkMeta
 from rag_app.vector_store.embedding_store import ArticleEmbeddingStore
+from rag_app.core.interface import IVectorStoreService
 from libs.utils.logger import init_component_logger
 
 logger = init_component_logger("VDB")
 
-class VectorStoreService:
+class VectorStoreService(IVectorStoreService):
     """
     向量库业务调度层
     """

@@ -7,11 +7,12 @@ from datetime import datetime
 import time as _time
 
 from rag_app.vector_store.types import ChunkMeta, DocMap
+from rag_app.core.interface import IVectorStore
 
 
 logger = logging.getLogger("VDB")
 
-class FaissVectorStore:
+class FaissVectorStore(IVectorStore):
     """
     FAISS 向量库存储层
     负责：

@@ -7,6 +7,7 @@ import numpy as np
 from rag_app.core import prompts
 from rag_app.core import robust_json_parser
 
+
 logger = logging.getLogger("RAG_APP")
 
 REPLY_REPORT_TEMPLATE = """

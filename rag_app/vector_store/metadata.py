@@ -5,11 +5,12 @@ import logging
 from typing import Optional, Dict
 
 from rag_app.vector_store.types import FileMeta, ArticleMeta, MetadataSchema
+from rag_app.core.interface import IMetadataRepository
 
 
 logger = logging.getLogger("VDB")
 
-class MetadataRepository:
+class MetadataRepository(IMetadataRepository):
     def __init__(self, path: str):
         self.path = path
         self._store = self._load_or_init()

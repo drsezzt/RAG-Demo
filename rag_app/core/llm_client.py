@@ -4,9 +4,11 @@ import requests
 import logging
 from libs.protocols.llm_contract import GenerateRequest, GenerateResponse
 
+from rag_app.core.interface import ILLMClient
+
 logger = logging.getLogger("RAG_APP")
 
-class LLMClient:
+class LLMClient(ILLMClient):
     def __init__(self, url):
         self.url = url
     def chat(self, prompt, **kwargs):
