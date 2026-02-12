@@ -7,22 +7,32 @@ from rag_app.core.interface import (
     IVectorStoreService
 )
 from rag_app.vector_store.service import VectorStoreService
+from shared.config import AppConfig, LLMConfig, RAGConfig, VectorStoreConfig
+
 
 class DIContainer:
     """依赖注入容器"""
 
-    def __init__(self, config: Dict[str, Any]):
-        self.config = config
+    def __init__(
+        self,
+        app_config: AppConfig,
+        llm_config: LLMConfig,
+        rag_config: RAGConfig,
+        vdb_config: VectorStoreConfig
+    ):
+        # 存储配置实例（类型安全）
+        self.app_config = app_config
+        self.llm_config = llm_config
+        self.rag_config = rag_config
+        self.vdb_config = vdb_config
+
         self._services: Dict[str, Any] = {}
 
     def get_vector_store(self) -> IVectorStore:
         """获取向量存储实例"""
         if "vector_store" not in self._services:
             from rag_app.vector_store.raw_faiss.store import FaissVectorStore
-            self._services["vector_store"] = FaissVectorStore(
-                dim=self.config["vector_store"]["dimension"],
-                store_dir=self.config["vector_store"]["index_path"]
-            )
+            self._services["vector_store"] = FaissVectorStore()
         return self._services["vector_store"]
 
     def get_metadata_repository(self) -> IMetadataRepository:
@@ -30,7 +40,7 @@ class DIContainer:
         if "metadata_repository" not in self._services:
             from rag_app.vector_store.metadata import MetadataRepository
             self._services["metadata_repository"] = MetadataRepository(
-                path=self.config["vector_store"]["meta_path"]
+                path=self.vdb_config.meta_path
             )
         return self._services["metadata_repository"]
 
@@ -45,7 +55,7 @@ class DIContainer:
         """获取 LLM 客户端实例"""
         if "llm_client" not in self._services:
             from rag_app.core.llm_client import LLMClient
-            url = f"http://{self.config['llm']['host']}:{self.config['llm']['port']}"
+            url = f"http://{self.llm_config.host}:{self.llm_config.port}"
             self._services["llm_client"] = LLMClient(url)
         return self._services["llm_client"]
 
@@ -60,9 +70,9 @@ class DIContainer:
                 store=vector_store,
                 metadata=metadata_repo,
                 embedder=embedder,
-                embed_path=self.config["vector_store"]["embed_path"],
-                chunk_size=self.config["vector_store"]["chunk_size"],
-                chunk_overlap=self.config["vector_store"]["chunk_overlap"]
+                embed_path=self.vdb_config.embed_path,
+                chunk_size=self.vdb_config.chunk_size,
+                chunk_overlap=self.vdb_config.chunk_overlap
             )
         return self._services["vector_store_service"]
 

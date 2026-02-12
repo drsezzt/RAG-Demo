@@ -5,12 +5,16 @@ import logging
 from libs.protocols.llm_contract import GenerateRequest, GenerateResponse
 
 from rag_app.core.interface import ILLMClient
+from shared.config import get_llm_config, get_rag_config
 
 logger = logging.getLogger("RAG_APP")
 
 class LLMClient(ILLMClient):
     def __init__(self, url):
         self.url = url
+        self.llm_config = get_llm_config()
+        self.rag_config = get_rag_config()
+
     def chat(self, prompt, **kwargs):
         request_data = GenerateRequest(
             text=prompt,
@@ -26,10 +30,10 @@ class LLMClient(ILLMClient):
 
         try:
             response = requests.post(
-                self.url + "/generate",
+                self.url + self.llm_config.endpoint,
                 json=payload,
                 headers=headers,
-                timeout=60
+                timeout=self.rag_config.timeout
             )
             response.raise_for_status()
 

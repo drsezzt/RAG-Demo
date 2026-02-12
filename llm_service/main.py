@@ -8,13 +8,15 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from libs.settings import AppConfig
 from libs.utils.logger import init_component_logger
 from libs.protocols.llm_contract import GenerateResponse, GenerateRequest
 from llm_service.engine import ChatGLM
+from shared.config import get_app_config, get_llm_config
 
 logger = init_component_logger("LLM")
-config = AppConfig.load("config/config.yaml")
+
+app_config = get_app_config()
+llm_config = get_llm_config()
 
 REQUEST_ID_HEADER = "X-Request-ID"      # 请求ID
 USER_ID_HEADER = "X-User-ID"            # 用户ID
@@ -34,7 +36,7 @@ async def request_id_middleware(request: Request, call_next):
 async def lifespan(app: FastAPI):
     logger.info("op=llm_service_begin")
 
-    models = config.llm.models
+    models = llm_config.models
     if not models:
         raise Exception("No LLM models configured")
 
@@ -55,9 +57,9 @@ async def lifespan(app: FastAPI):
     logger.info("op=llm_service_finish")
 
 app = FastAPI(
-    title="ChatGLM3-6B API",
-    description="ChatGLM3-6B API",
-    version="1.0.0",
+    title=app_config.app_name,
+    description=app_config.app_description,
+    version=app_config.app_version,
     lifespan=lifespan
 )
 app.middleware("http")(request_id_middleware)
@@ -65,7 +67,7 @@ app.middleware("http")(request_id_middleware)
 # 测试
 @app.get("/")
 def read_root():
-    return {"msg": "ChatGLM3-6B API Service"}
+    return {"msg": f"{app_config.app_name} API Service"}
 
 # 测试
 @app.get("/health")
@@ -74,7 +76,7 @@ def check_health(request: Request):
     return {"status": "healthy", "model_loaded": True}
 
 # 生成
-@app.post("/generate", response_model=GenerateResponse)
+@app.post(llm_config.endpoint, response_model=GenerateResponse)
 def generate(
     request: Request,
     body: GenerateRequest
@@ -153,7 +155,7 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         app,
-        host="0.0.0.0",
-        port=8001,
-        log_level="info"
+        host=llm_config.host,
+        port=llm_config.port,
+        log_level=app_config.log_level.lower()
     )

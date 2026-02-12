@@ -4,7 +4,7 @@ llm:
   host: 0.0.0.0
   port: 8001
   models:
-    - name: ChatGLM4-6B-Q5_1
+    - name: ChatGLM3-6B-Q5_1
       path: /home/zzt/models/llm/chatglm3/6b-q5_1/chatglm3-q5_1.bin
 
 rag:

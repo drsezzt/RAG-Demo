@@ -6,17 +6,28 @@ import json
 from fastapi import FastAPI, Request, Depends
 
 from libs.utils.logger import init_component_logger
-from libs.settings import AppConfig
 from libs.protocols.rag_contract import ChatRequest, ChatResponse
 from libs.protocols.vdb_contract import GetDocListResponse, AddDocRequest, CommonResponse
 from rag_app.core.container import DIContainer
 from rag_app.core.interface import IVectorStoreService
+from shared.config import get_app_config, get_llm_config, get_rag_config, get_vdb_config
 
 
 logger = init_component_logger("RAG_APP")
-config = AppConfig.load("config/config.yaml")
 
-container = DIContainer(config.model_dump())
+# 加载配置
+app_config = get_app_config()
+llm_config = get_llm_config()
+rag_config = get_rag_config()
+vdb_config = get_vdb_config()
+
+# 直接使用配置实例初始化容器
+container = DIContainer(
+    app_config=app_config,
+    llm_config=llm_config,
+    rag_config=rag_config,
+    vdb_config=vdb_config
+)
 
 async def lifespan(app: FastAPI):
     logger.info("op=rag_app_begin")
@@ -35,9 +46,9 @@ async def lifespan(app: FastAPI):
     logger.info("op=rag_app_finish")
 
 app = FastAPI(
-    title="RAGSystem API",
-    description="RAGSystem API",
-    version="1.0.0",
+    title=app_config.app_name,
+    description=app_config.app_description,
+    version=app_config.app_version,
     lifespan=lifespan
 )
 
@@ -50,8 +61,14 @@ def get_rag_service(request: Request):
     """获取 RAG 服务依赖"""
     return request.app.state.rag_service
 
+# 测试
+@app.get("/health")
+def check_health():
+    logger.debug("op=health_check model_loaded=true")
+    return {"status": "healthy", "model_loaded": True}
+
 # 问答接口
-@app.post("/chat", response_model=ChatResponse)
+@app.post(rag_config.endpoint, response_model=ChatResponse)
 async def chat(
     chat_in: ChatRequest,
     rag_service = Depends(get_rag_service)
@@ -65,7 +82,7 @@ async def chat(
         answer = rag_service.call_rag_flow(chat_in.text)
         logger.info(
             "op=chat_end "
-            f"answer={answer}"
+            f"answer_length={len(answer)}"
         )
         return ChatResponse(response=answer)
     except Exception as e:
@@ -127,7 +144,8 @@ async def add_doc(
         f"doc_name={param_in.name}"
     )
     try:
-        tmp_path = "/tmp/" + param_in.name
+        # 使用配置中的临时文件目录
+        tmp_path = app_config.temp_file_dir + "/" + param_in.name
         with open(tmp_path, "w", encoding="utf-8") as f:
             f.write(param_in.content)
         if vdb_service.add_file(tmp_path):
@@ -145,8 +163,9 @@ async def add_doc(
 if __name__ == "__main__":
     import uvicorn
 
-    host = config.rag.host
-    port = config.rag.port
+    # 使用配置中的服务器设置
+    host = rag_config.host
+    port = rag_config.port
     logger.info(
         "op=uvicorn_start "
         f"host={host} "
@@ -156,6 +175,6 @@ if __name__ == "__main__":
         app,
         host=host,
         port=port,
-        log_level="info"
+        log_level=app_config.log_level.lower()
     )
     logger.info("op=uvicorn_running")

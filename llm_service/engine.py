@@ -6,8 +6,10 @@ import time
 import logging
 
 from llm_service import chatglm_cpp
+from shared.config import get_llm_config
 
 logger = logging.getLogger("LLM")
+llm_config = get_llm_config()
 
 class ChatGLM:
     def __init__(self, path):
@@ -39,9 +41,9 @@ class ChatGLM:
         req_id: str,
         user_id: str | None = None,
         do_sample: bool = False,
-        temperature: float = 0.7,
-        top_p: float = 0.9,
-        max_tokens: int = 2048,
+        temperature: float = llm_config.default_temperature,
+        top_p: float = llm_config.default_top_p,
+        max_tokens: int = llm_config.default_max_tokens,
     ):
         user_id = user_id or "anonymous"
         logger.info(

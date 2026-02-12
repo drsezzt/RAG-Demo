@@ -2,18 +2,32 @@ import requests
 
 import streamlit as st
 
-from libs.settings import AppConfig
+from shared.config import (
+    get_ui_config,
+    get_rag_config,
+    get_llm_config
+)
 from libs.utils.logger import init_component_logger
 
 @st.cache_resource
-def get_app_config():
-    return AppConfig.load("config/config.yaml")
+def get_ui_config_cached():
+    return get_ui_config()
+
+@st.cache_resource
+def get_rag_config_cached():
+    return get_rag_config()
+
+@st.cache_resource
+def get_llm_config_cached():
+    return get_llm_config()
 
 @st.cache_resource
 def get_logger():
     return init_component_logger("RAG_GUI")
 
-config = get_app_config()
+ui_config = get_ui_config_cached()
+rag_config = get_rag_config_cached()
+llm_config = get_llm_config_cached()
 logger = get_logger()
 
 def render_admin():
@@ -28,7 +42,7 @@ def render_admin():
     with st.sidebar:
         st.header("系统状态")
         st.success("后端连接正常")
-        st.info("当前模型：ChatGLM3-6B-Q5_1")
+        st.info("当前模型：" + llm_config.models[0].name)
         if st.button("清除对话历史"):
             st.session_state.messages = []
 
@@ -41,16 +55,16 @@ def render_admin():
         with st.chat_message("user"):
             st.markdown(user_input)
 
-        url = "http://" + config.rag.host + ":" + str(config.rag.port)
+        url = "http://" + rag_config.host + ":" + str(rag_config.port)
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             message_placeholder.markdown("🔍 正在检索知识库并生成回复...")
 
             try:
                 response = requests.post(
-                    url + "/chat",
+                    url + rag_config.endpoint,
                     json={"text": user_input},
-                    timeout=60
+                    timeout=ui_config.timeout
                 )
 
                 if response.status_code == 200:

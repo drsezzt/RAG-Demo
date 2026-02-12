@@ -71,7 +71,6 @@ wait_http_ok() {
   done
   echo ""
   print "ERROR: timeout waiting ${name}: ${url}"
-  
   # 探测失败时，尝试打印对应日志文件的最后10行，帮助定位问题
   local log_file=""
   case "${name}" in
@@ -154,7 +153,7 @@ main() {
     print "ERROR: ${LLM_BASE} already responding. Please stop existing llm_service first."
     exit 1
   fi
-  if is_port_responding "${RAG_BASE}/doc"; then
+  if is_port_responding "${RAG_BASE}/health"; then
     print "ERROR: ${RAG_BASE} already responding. Please stop existing rag_app first."
     exit 1
   fi
@@ -182,7 +181,7 @@ main() {
   print "vdbui pgid=${VDBUI_PID}"
 
   wait_http_ok "${LLM_BASE}/health" "llm_service" 240 0.5
-  wait_http_ok "${RAG_BASE}/doc" "rag_app" 120 0.5
+  wait_http_ok "${RAG_BASE}/health" "rag_app" 120 0.5
   wait_http_ok "${VDBUI_BASE}" "vdbui" 120 0.5
 
   print "running API tests against ${RAG_BASE}"

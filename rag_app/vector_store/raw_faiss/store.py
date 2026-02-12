@@ -8,6 +8,7 @@ import time as _time
 
 from rag_app.vector_store.types import ChunkMeta, DocMap
 from rag_app.core.interface import IVectorStore
+from shared.config import get_vdb_config
 
 
 logger = logging.getLogger("VDB")
@@ -21,23 +22,12 @@ class FaissVectorStore(IVectorStore):
     - 持久化
     """
 
-    def __init__(
-        self,
-        dim: int,
-        store_dir: str,
-    ):
-        """
-        dim: 向量维度（如 bge=512）
-        store_dir: data/vector_store/
-        """
+    def __init__(self):
+        self.vdb_config = get_vdb_config()
 
-        self.dim = dim
-        self.store_dir = store_dir
-
-        self.index_path = os.path.join(store_dir, "faiss.index")
-        self.map_path = os.path.join(store_dir, "doc_map.json")
-
-        os.makedirs(store_dir, exist_ok=True)
+        self.dim = self.vdb_config.dimension
+        self.index_path = self.vdb_config.index_path
+        self.map_path = self.vdb_config.map_path
 
         self.index = self._load_or_create_index()
         self.doc_map = self._load_or_create_map()

@@ -3,29 +3,35 @@ import json
 
 import streamlit as st
 
-from libs.settings import AppConfig
+from shared.config import get_app_config, get_rag_config
 from libs.utils.logger import init_component_logger
 from ui.vdb_client import VDBClient
 
 @st.cache_resource
-def get_app_config():
-    return AppConfig.load("config/config.yaml")
+def get_app_config_cached():
+    return get_app_config()
+
+@st.cache_resource
+def get_rag_config_cached():
+    return get_rag_config()
 
 @st.cache_resource
 def get_logger():
     return init_component_logger("VDB_GUI")
 
 @st.cache_resource
-def get_vdb_client(config):
-    url = "http://" + config.rag.host + ":" + str(config.rag.port)
+def get_vdb_client():
+    rag_config = get_rag_config_cached()
+    url = "http://" + rag_config.host + ":" + str(rag_config.port)
     logger.info(f"op=vdb_client_load_start url={url}")
     vdb_client = VDBClient(base_url=url)
     logger.info(f"op=vdb_client_load_done")
     return vdb_client
 
-config = get_app_config()
+rag_config = get_rag_config_cached()
+app_config = get_app_config_cached()
 logger = get_logger()
-vdb_client = get_vdb_client(config)
+vdb_client = get_vdb_client()
 
 # 在脚本顶层初始化一个用于控制 file_uploader 的版本号
 if "file_uploader_key" not in st.session_state:
@@ -80,7 +86,7 @@ def render_admin():
         st.caption("提示：文件名将自动作为文档名称，内容请按‘第X条’格式排版")
         uploaded_file = st.file_uploader(
             "选择文件",
-            type=['txt'],
+            type=app_config.supported_file_extensions,
             key=f"uploader_{st.session_state['file_uploader_key']}"
         )
 
