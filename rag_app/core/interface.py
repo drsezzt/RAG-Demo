@@ -1,6 +1,8 @@
 from typing import Protocol, List, Optional, runtime_checkable
 import numpy as np
 
+from rag_app.vector_store.types import ChunkMeta
+
 
 @runtime_checkable
 class IVectorStore(Protocol):
@@ -17,7 +19,7 @@ class IVectorStore(Protocol):
         """按文件删除向量"""
         ...
 
-    def get(self, chunk_id: int):
+    def get(self, chunk_id: int) -> ChunkMeta:
         """获取向量元数据"""
         ...
 
@@ -77,7 +79,7 @@ class IVectorStoreService(Protocol):
         """搜索文档"""
         ...
 
-    def add_file(self, file_path: str) -> bool:
+    def add_file(self, name: str, content: str) -> bool:
         """添加文件"""
         ...
 
@@ -87,4 +89,20 @@ class IVectorStoreService(Protocol):
 
     def list_files(self) -> List:
         """列出文件"""
+        ...
+
+    def get_chunk(self, chunk_id: int) -> ChunkMeta:
+        """获取向量元数据"""
+        ...
+
+    def embed_query(self, query: str) -> np.ndarray:
+        """嵌入查询"""
+        ...
+
+    def get_article_chunk(self, article_id: str):
+        """获取文章切分信息"""
+        ...
+
+    def get_article_meta(self, article_id: str):
+        """获取文章元数据"""
         ...

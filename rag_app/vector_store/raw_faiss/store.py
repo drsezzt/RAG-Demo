@@ -108,7 +108,7 @@ class FaissVectorStore(IVectorStore):
         norms[norms == 0] = 1e-12
         return vectors / norms
 
-    def get(self, chunk_id: int):
+    def get(self, chunk_id: int) -> ChunkMeta:
         """
         获取向量
         """

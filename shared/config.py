@@ -68,9 +68,9 @@ class RAGConfig(ComponentConfig):
     max_retrieved_articles: int = Field(2, description="最大返回文章数")
 
     # 生成参数
-    chat_temperature: float = Field(0.01, description="生成温度参数")
-    chat_top_p: float = Field(0.1, description="生成top_p参数")
-    chat_max_tokens: int = Field(8192, description="生成最大token数")
+    chat_temperature: float = Field(0.01, description="聊天温度参数")
+    chat_top_p: float = Field(0.1, description="聊天top_p参数")
+    chat_max_tokens: int = Field(8192, description="聊天最大token数")
 
     @validator("similarity_threshold")
     def validate_similarity_threshold(cls, v):
@@ -147,7 +147,6 @@ class AppConfig(BaseSettings):
         description="支持的文件扩展名"
     )
     max_file_size_mb: int = Field(10, description="最大文件大小（MB）")
-    temp_file_dir: str = Field("/tmp", description="临时文件目录")
 
     class Config:
         env_file = ".env"

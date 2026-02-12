@@ -144,11 +144,7 @@ async def add_doc(
         f"doc_name={param_in.name}"
     )
     try:
-        # 使用配置中的临时文件目录
-        tmp_path = app_config.temp_file_dir + "/" + param_in.name
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            f.write(param_in.content)
-        if vdb_service.add_file(tmp_path):
+        if vdb_service.add_file(param_in.name, param_in.content):
             logger.info("op=add_doc_end")
             return CommonResponse(status="ok")
         logger.error("op=add_doc_error")

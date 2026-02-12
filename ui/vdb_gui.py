@@ -87,7 +87,8 @@ def render_admin():
         uploaded_file = st.file_uploader(
             "选择文件",
             type=app_config.supported_file_extensions,
-            key=f"uploader_{st.session_state['file_uploader_key']}"
+            key=f"uploader_{st.session_state['file_uploader_key']}",
+            max_upload_size=app_config.max_file_size_mb
         )
 
         if uploaded_file:

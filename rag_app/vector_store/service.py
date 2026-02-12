@@ -78,33 +78,26 @@ class VectorStoreService(IVectorStoreService):
         files_dict = self.metadata.list_all_files()
         return list(files_dict.values())
 
-    def add_file(self, file_path: str) -> bool:
+    def add_file(self, filename: str, content: str) -> bool:
         """
         添加文件到向量库
 
         Args:
-            file_path: 文件路径
+            filename: 文件名
+            content: 文件内容
 
         Returns:
             bool: 是否添加成功
         """
         start = time.time()
 
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(file_path)
-
-        filename = os.path.basename(file_path)
-
-        # 检查文件是否已存在
+        # 1. 检查文件是否已存在
         for f in self.metadata.list_all_files().values():
             if f.filename == filename:
                 raise ValueError(f"{filename} already indexed")
 
-        # 1. 读取文本
-        text = self._load_file(file_path)
-
         # 2. 切分chunk和article
-        chunks = self._split_text(text)
+        chunks = self._split_text(content)
 
         # 3. Embedding
         vectors = self._embed(chunks)
@@ -129,7 +122,7 @@ class VectorStoreService(IVectorStoreService):
         # 6. 构造articlemetas
         articlemetas = []
         offset = 0
-        articles = text.splitlines()
+        articles = content.splitlines()
         article_ids = []
         for article in articles:
             article_id = str(uuid.uuid4().hex)
@@ -159,7 +152,7 @@ class VectorStoreService(IVectorStoreService):
             file_id=file_id,
             filename=filename,
             chunks=len(chunks),
-            size=os.path.getsize(file_path),
+            size=len(content),
             article_ids=article_ids,
             created_at=datetime.now()
         )
@@ -249,37 +242,21 @@ class VectorStoreService(IVectorStoreService):
 
         return results
 
+    def get_chunk(self, chunk_id) -> ChunkMeta:
+        return self.store.get(chunk_id)
+
+    def embed_query(self, query: str) -> np.ndarray:
+        return self.embedder.embed_query(query)
+
+    def get_article_chunk(self, article_id: str):
+        return self.article_store.get(article_id)
+
+    def get_article_meta(self, article_id: str):
+        return self.metadata.get_article(article_id)
+
     # ===========================
     # Internal Methods
     # ===========================
-
-    def _load_file(self, path: str) -> str:
-        """
-        加载文件内容
-
-        Args:
-            path: 文件路径
-
-        Returns:
-            str: 文件内容
-        """
-        ext = os.path.splitext(path)[1].lower()
-
-        # 检查文件扩展名是否支持
-        if ext not in self.app_config.supported_file_extensions:
-            raise ValueError(
-                f"unsupported file extension: {ext}. "
-                f"Supported: {self.app_config.supported_file_extensions}"
-            )
-
-        # 检查文件大小
-        file_size = os.path.getsize(path)
-        max_size_bytes = self.app_config.max_file_size_mb * 1024 * 1024
-        if file_size > max_size_bytes:
-            raise ValueError(f"file too large: {file_size} bytes. Max: {max_size_bytes} bytes")
-
-        with open(path, encoding="utf-8") as f:
-            return f.read()
 
     def _split_text(self, text: str) -> List[str]:
         """

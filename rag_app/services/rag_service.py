@@ -114,28 +114,22 @@ class RAGService:
         article_ids = set()
 
         for r in results:
-            # 注意：这里仍然存在耦合，需要后续重构
-            # 理想情况下应该通过接口方法获取，而不是直接访问内部属性
-            store = self.vdb.store  # 临时解决方案
-            chunk = store.get(int(r["chunk_id"]))
+            chunk = self.vdb.get_chunk(int(r["chunk_id"]))
             article_ids.update(chunk.article_ids)
 
         # 获取嵌入器
-        embedder = self.vdb.embedder  # 临时解决方案
-        q_vec = embedder.embed_query(query)
+        q_vec = self.vdb.embed_query(query)
 
         articles = []
 
         for aid in article_ids:
             # 获取文章向量
-            article_store = self.vdb.article_store  # 临时解决方案
-            vec = article_store.get(aid)
+            vec = self.vdb.get_article_chunk(aid)
             if vec is not None:
                 score = cosine_sim(q_vec, vec)
 
                 # 获取文章元数据
-                metadata = self.vdb.metadata  # 临时解决方案
-                article_meta = metadata.get_article(aid)
+                article_meta = self.vdb.get_article_meta(aid)
                 if article_meta:
                     articles.append((score, article_meta))
 
