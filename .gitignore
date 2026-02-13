@@ -212,3 +212,6 @@ data/vector_store/*
 llm_service/chatglm_cpp/_C.cpython-310-x86_64-linux-gnu.so
 
 test/test_data.txt
+
+.trae/
+.trae-knowledge.md
